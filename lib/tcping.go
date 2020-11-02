@@ -66,15 +66,15 @@ func (c TcpingClient) RunOnce() (responseTime int64, remoteAddr net.Addr, err er
 	select {
 	case <-done:
 		t := time.Since(t0)
-		remoteAddr = (*socket.Conn).RemoteAddr()
-		if c.outputOn {
-			fmt.Printf(" (%s)", remoteAddr)
-		}
 		if err != nil {
 			if c.outputOn {
 				fmt.Printf(": %s\n", err)
 			}
 			return
+		}
+		remoteAddr = (*socket.Conn).RemoteAddr()
+		if c.outputOn {
+			fmt.Printf(" (%s)", remoteAddr)
 		}
 		responseTime = t.Nanoseconds()
 		if c.outputOn {

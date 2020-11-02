@@ -3,6 +3,7 @@ package lib
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -15,12 +16,13 @@ type TcpingClient struct {
 	Host     string
 	Port     int
 	tryCount int
-	timeOut  int
+	// Timeout in `ms`.
+	timeOut  int64
 	outputOn bool
 }
 
-func NewTcpingClient(host string, port *int, tryCount *int, timeOut *int) *TcpingClient {
-	port_, tryCount_, timeOut_ := 80, 10, 5000
+func NewTcpingClient(host string, port *int, tryCount *int, timeOut *int64) *TcpingClient {
+	port_, tryCount_, timeOut_ := 80, 10, int64(5000)
 	if port != nil {
 		port_ = *port
 	}
@@ -47,7 +49,7 @@ func (c TcpingClient) RunOnce() (responseTime int64, remoteAddr net.Addr, err er
 	socket := NewSocket("tcp")
 	host, port := c.Host, c.Port
 	if c.outputOn {
-		fmt.Printf("Connecting to %s", net.JoinHostPort(host, string(port)))
+		fmt.Printf("Connecting to `%s`", net.JoinHostPort(host, strconv.Itoa(port)))
 	}
 
 	asyncConnect := func(done chan struct{}) {
@@ -57,7 +59,7 @@ func (c TcpingClient) RunOnce() (responseTime int64, remoteAddr net.Addr, err er
 
 	done := make(chan struct{})
 	t0 := time.Now()
-	timer := time.NewTimer(time.Duration(c.timeOut))
+	timer := time.NewTimer(time.Duration(c.timeOut) * time.Millisecond)
 
 	go asyncConnect(done)
 
@@ -70,21 +72,20 @@ func (c TcpingClient) RunOnce() (responseTime int64, remoteAddr net.Addr, err er
 		}
 		if err != nil {
 			if c.outputOn {
-				fmt.Printf(": %s", err)
+				fmt.Printf(": %s\n", err)
 			}
 			return
 		}
 		responseTime = t.Nanoseconds()
 		if c.outputOn {
-			fmt.Printf(": time=%.2fms", float32(t)/1e3)
+			fmt.Printf(": time=%.2fms\n", float32(t)/1e6)
 		}
 		return
 
 	case <-timer.C:
 		responseTime = TimedOut
-		remoteAddr = (*socket.Conn).RemoteAddr()
 		if c.outputOn {
-			fmt.Printf(" (%s): timed out", remoteAddr)
+			fmt.Printf(": timed out after %.2fms\n", float32(c.timeOut))
 		}
 		return
 	}

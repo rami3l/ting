@@ -3,6 +3,7 @@ package lib
 import (
 	"errors"
 	"net"
+	"strconv"
 )
 
 type Socket struct {
@@ -18,7 +19,7 @@ func NewSocket(connType string) *Socket {
 }
 
 func (s *Socket) Connect(host string, port int) (err error) {
-	conn, err := net.Dial(s.ConnType, net.JoinHostPort(host, string(port)))
+	conn, err := net.Dial(s.ConnType, net.JoinHostPort(host, strconv.Itoa(port)))
 	if err != nil {
 		return
 	}

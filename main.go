@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"github.com/rami3l/ting/cmd"
 )
 
 func main() {
-	fmt.Printf("Hello, ting!")
+	cmd.Main()
 }

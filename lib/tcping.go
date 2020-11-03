@@ -3,6 +3,9 @@ package lib
 import (
 	"fmt"
 	"net"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
@@ -91,7 +94,7 @@ type TcpingClient struct {
 }
 
 func NewTcpingClient(host string, port *int, tryCount *int, timeOut *time.Duration) *TcpingClient {
-	port_, tryCount_, timeOut_ := 80, 10, 5*time.Second
+	port_, tryCount_, timeOut_ := 80, 5, 5*time.Second
 	if port != nil {
 		port_ = *port
 	}
@@ -163,8 +166,20 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 }
 
 func (c TcpingClient) Run() (s Stats, err error) {
+	// Handle SIGINT and SIGTERM
+	signalNotifier := make(chan os.Signal, 5)
+	signal.Notify(signalNotifier, os.Interrupt, syscall.SIGTERM)
+
 	results := []Result{}
+
+Loop:
 	for i := 0; i < c.tryCount; func() { time.Sleep(1 * time.Second); i++ }() {
+		select {
+		case <-signalNotifier:
+			fmt.Println("\r- Ctrl+C")
+			break Loop
+		default:
+		}
 		if c.outputOn {
 			fmt.Printf("%3d> ", i)
 		}
@@ -177,13 +192,9 @@ func (c TcpingClient) Run() (s Stats, err error) {
 			})
 		}
 	}
+
 	s = Stats{Results: results}
 	if c.outputOn {
-		/*
-			--- api.github.com[:80] tcping statistics ---
-			10 connections, 10 succeeded, 0 failed, 100.00% success rate
-			minimum = 233.51ms, maximum = 251.77ms, average = 243.40ms
-		*/
 		count := s.Count()
 		succCount := s.SuccCount()
 		failCount := count - succCount

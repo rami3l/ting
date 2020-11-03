@@ -29,5 +29,5 @@ func SetupInterruptHandler() {
 
 func testTcpingClient() {
 	client := lib.NewTcpingClient("google.com", nil, nil, nil).EnableOutput()
-	client.RunOnce()
+	client.Run()
 }

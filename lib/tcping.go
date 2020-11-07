@@ -12,104 +12,43 @@ import (
 // Indicates a connection timeout.
 const TimedOut = -1
 
-func microseconds(t time.Duration) float32 {
-	return float32(t.Nanoseconds()) / 1e6
-}
-
-type Result struct {
-	ResponseTime time.Duration
-	RemoteAddr   net.Addr
-}
-
-type Stats struct {
-	Results []Result
-}
-
-func (s Stats) Count() (c int) {
-	return len(s.Results)
-}
-
-func (s Stats) SuccCount() (sc int) {
-	for _, r := range s.Results {
-		if r.ResponseTime.Nanoseconds() > 0 {
-			sc++
-		}
-	}
-	return
-}
-
-func (s Stats) FailCount() (fc int) {
-	for _, r := range s.Results {
-		if r.ResponseTime.Nanoseconds() <= 0 {
-			fc++
-		}
-	}
-	return
-}
-
-func (s Stats) MaxTime() (mt time.Duration) {
-	if s.Count() <= 0 {
-		return
-	}
-	mt = s.Results[0].ResponseTime
-	for _, r := range s.Results[1:] {
-		if t := r.ResponseTime; t > mt {
-			mt = t
-		}
-	}
-	return
-}
-
-func (s Stats) MinTime() (mt time.Duration) {
-	if s.Count() <= 0 {
-		return
-	}
-	mt = s.Results[0].ResponseTime
-	for _, r := range s.Results[1:] {
-		if t := r.ResponseTime; t < mt {
-			mt = t
-		}
-	}
-	return
-}
-
-func (s Stats) AvgTime() (at time.Duration) {
-	if s.Count() <= 0 {
-		return
-	}
-	var st time.Duration
-	for _, r := range s.Results {
-		st += r.ResponseTime
-	}
-	avg := st.Nanoseconds() / int64(s.Count())
-	return time.Duration(avg) * time.Nanosecond
-}
-
 type TcpingClient struct {
-	Host     string
-	Port     int
-	tryCount int
-	timeOut  time.Duration
-	outputOn bool
+	Host        string
+	Port        int
+	tryCount    int
+	tryInterval time.Duration
+	timeout     time.Duration
+	outputOn    bool
 }
 
-func NewTcpingClient(host string, port *int, tryCount *int, timeOut *time.Duration) *TcpingClient {
-	port_, tryCount_, timeOut_ := 80, 5, 5*time.Second
-	if port != nil {
-		port_ = *port
-	}
-	if tryCount != nil {
-		tryCount_ = *tryCount
-	}
-	if timeOut != nil {
-		timeOut_ = *timeOut
-	}
+func NewTcpingClient(host string) *TcpingClient {
 	return &TcpingClient{
-		Host:     host,
-		Port:     port_,
-		tryCount: tryCount_,
-		timeOut:  timeOut_,
+		Host:        host,
+		Port:        80,
+		tryCount:    5,
+		tryInterval: 1 * time.Second,
+		timeout:     5 * time.Second,
 	}
+}
+
+func (c *TcpingClient) SetPort(port int) *TcpingClient {
+	c.Port = port
+	return c
+}
+
+func (c *TcpingClient) SetTryCount(tryCount int) *TcpingClient {
+	c.tryCount = tryCount
+	return c
+}
+
+func (c *TcpingClient) SetTryInterval(tryInterval time.Duration) *TcpingClient {
+	c.tryInterval = tryInterval
+	return c
+}
+
+func (c *TcpingClient) SetTimeout(timeout time.Duration) *TcpingClient {
+	c.timeout = timeout
+	return c
 }
 
 func (c *TcpingClient) EnableOutput() *TcpingClient {
@@ -134,7 +73,7 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 
 	done := make(chan struct{})
 	t0 := time.Now()
-	timer := time.NewTimer(c.timeOut)
+	timer := time.NewTimer(c.timeout)
 
 	go asyncConnect(done)
 
@@ -173,7 +112,7 @@ func (c TcpingClient) Run() (s Stats, err error) {
 	results := []Result{}
 
 Loop:
-	for i := 0; i < c.tryCount; func() { time.Sleep(1 * time.Second); i++ }() {
+	for i := 0; i < c.tryCount; func() { time.Sleep(c.tryInterval); i++ }() {
 		select {
 		case <-signalNotifier:
 			fmt.Println("\r- Ctrl+C")

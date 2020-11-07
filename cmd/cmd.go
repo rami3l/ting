@@ -16,6 +16,7 @@ func App() (app *cobra.Command) {
 
 	app.Args = cobra.MinimumNArgs(1)
 
+	app.Flags().SortFlags = true
 	port := app.Flags().IntP("port", "p", 80, "Numeric TCP port")
 	tryCount := app.Flags().IntP("count", "n", 5, "Number of tries")
 	tryInterval := app.Flags().Float32P("interval", "i", 1, "Interval between pings, in seconds")

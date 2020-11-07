@@ -91,14 +91,20 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 			fmt.Printf(" (%s)", remoteAddr)
 		}
 		if c.outputOn {
-			fmt.Printf(": time=%.2fms\n", microseconds(responseTime))
+			fmt.Printf(
+				": time=%s\n",
+				SprintDuration("%.2f", responseTime, time.Millisecond),
+			)
 		}
 		return
 
 	case <-timer.C:
 		responseTime = TimedOut
 		if c.outputOn {
-			fmt.Printf(": timed out after %.2fms\n", microseconds(responseTime))
+			fmt.Printf(
+				": timed out after %s\n",
+				SprintDuration("%.2f", responseTime, time.Millisecond),
+			)
 		}
 		return
 	}
@@ -138,13 +144,18 @@ Loop:
 		succCount := s.SuccCount()
 		failCount := count - succCount
 		succRate := float32(succCount) / float32(count)
+		minTime := SprintDuration("%.2f", s.MinTime(), time.Millisecond)
+		maxTime := SprintDuration("%.2f", s.MaxTime(), time.Millisecond)
+		avgTime := SprintDuration("%.2f", s.AvgTime(), time.Millisecond)
+
 		fmt.Printf(`
 --- %s tcping statistics ---
 %d connections, %d succeeded, %d failed, %.2f%% success rate
-minimum = %.2fms, maximum = %.2fms, average = %.2fms
+minimum = %s, maximum = %s, average = %s
 `,
-			c.HostAndPort(), count, succCount, failCount, succRate*100,
-			microseconds(s.MinTime()), microseconds(s.MaxTime()), microseconds(s.AvgTime()),
+			c.HostAndPort(),
+			count, succCount, failCount, succRate*100,
+			minTime, maxTime, avgTime,
 		)
 	}
 	return

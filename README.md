@@ -6,7 +6,16 @@
 
 - [ting](#ting)
   - [Contents](#contents)
+  - [Motivation & Current Status](#motivation--current-status)
   - [Usage & Options](#usage--options)
+
+## Motivation & Current Status
+
+This project is heavily inspired by [zhengxiaowai/tcping], which is working pretty fine most of the times,
+but gets potentially broken when the `Python` interpreter gets updated.  
+
+Thus, using `Golang` enables me to solve the problem almost as efficiently, with the additional benefit of
+being able to easily distribute the binaries.
 
 ## Usage & Options
 

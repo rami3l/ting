@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// SprintDuration pretty prints a time.Duration.
 func SprintDuration(
 	format string,
 	t time.Duration,
@@ -18,6 +19,7 @@ func SprintDuration(
 	return fmt.Sprintf(format, unitCount) + unitName
 }
 
+// JoinHostPort makes a "host:port" pair as string.
 func JoinHostPort(host string, port int) string {
 	return net.JoinHostPort(host, strconv.Itoa(port))
 }

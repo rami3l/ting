@@ -12,6 +12,7 @@ import (
 // Indicates a connection timeout.
 const TimedOut = -1
 
+// TcpingClient is a ping-like speed test client, but works under TCP.
 type TcpingClient struct {
 	Host        string
 	Port        int
@@ -21,6 +22,7 @@ type TcpingClient struct {
 	outputOn    bool
 }
 
+// NewTcpingClient initializes a TcpingClient in default settings.
 func NewTcpingClient(host string) *TcpingClient {
 	return &TcpingClient{
 		Host:        host,
@@ -51,15 +53,18 @@ func (c *TcpingClient) SetTimeout(timeout time.Duration) *TcpingClient {
 	return c
 }
 
+// EnableOutput turns on the output of TcpingClient to stdout.
 func (c *TcpingClient) EnableOutput() *TcpingClient {
 	c.outputOn = true
 	return c
 }
 
+// HostAndPort returns the "host:port" pair of this client.
 func (c TcpingClient) HostAndPort() string {
 	return JoinHostPort(c.Host, c.Port)
 }
 
+// RunOnce makes a single tcping test.
 func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr, err error) {
 	socket := NewSocket("tcp")
 	if c.outputOn {
@@ -78,26 +83,28 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 	go asyncConnect(done)
 
 	select {
+	// Connection finished (or returned an error) before timeout.
 	case <-done:
 		responseTime = time.Since(t0)
 		if err != nil {
 			if c.outputOn {
 				fmt.Printf(": %s\n", err)
 			}
+			// The default response time on error should be -1.
+			responseTime = -1
 			return
 		}
 		remoteAddr = (*socket.Conn).RemoteAddr()
 		if c.outputOn {
-			fmt.Printf(" (%s)", remoteAddr)
-		}
-		if c.outputOn {
 			fmt.Printf(
-				": time=%s\n",
+				" (%s): time=%s\n",
+				remoteAddr,
 				SprintDuration("%.2f", responseTime, time.Millisecond),
 			)
 		}
 		return
 
+	// Connection timed out.
 	case <-timer.C:
 		responseTime = TimedOut
 		if c.outputOn {
@@ -110,7 +117,8 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 	}
 }
 
-func (c TcpingClient) Run() (s Stats, err error) {
+// Run makes several consequent tcping tests and analyzes the overall result.
+func (c TcpingClient) Run() (s Stats) {
 	// Handle SIGINT and SIGTERM
 	signalNotifier := make(chan os.Signal, 5)
 	signal.Notify(signalNotifier, os.Interrupt, syscall.SIGTERM)
@@ -119,25 +127,30 @@ func (c TcpingClient) Run() (s Stats, err error) {
 
 Loop:
 	for i := 0; i < c.tryCount; func() { time.Sleep(c.tryInterval); i++ }() {
+		// If we have received a signal, we need to break the loop early.
 		select {
 		case <-signalNotifier:
-			fmt.Println("\r- Ctrl+C")
+			fmt.Println("\r  <Ctrl+C>")
 			break Loop
 		default:
 		}
+
+		// Otherwise, we launch the client with `c.RunOnce()`.
+		// Show the number of tries.
 		if c.outputOn {
 			fmt.Printf("%3d> ", i)
 		}
-		if responseTime, remoteAddr, err := c.RunOnce(); err != nil {
-			return Stats{Results: results}, err
-		} else {
-			results = append(results, Result{
-				ResponseTime: responseTime,
-				RemoteAddr:   remoteAddr,
-			})
-		}
+		// We discard all errors here ON PURPOSE:
+		// errors should not stop the looping.
+		responseTime, remoteAddr, err := c.RunOnce()
+		results = append(results, Result{
+			ResponseTime: responseTime,
+			RemoteAddr:   remoteAddr,
+			Error:        err,
+		})
 	}
 
+	// Analyze and print the final result.
 	s = Stats{Results: results}
 	if c.outputOn {
 		count := s.Count()

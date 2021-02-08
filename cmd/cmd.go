@@ -40,9 +40,7 @@ func App() (app *cobra.Command) {
 					SetTryInterval(tryInterval).
 					SetTimeout(timeout).
 					EnableOutput()
-				if _, err := client.Run(); err != nil {
-					return err
-				}
+				client.Run()
 			}
 
 			return

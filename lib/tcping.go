@@ -110,7 +110,7 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 		if c.outputOn {
 			fmt.Printf(
 				": timed out after %s\n",
-				SprintDuration("%.2f", responseTime, time.Millisecond),
+				SprintDuration("%.2f", c.timeout, time.Millisecond),
 			)
 		}
 		return

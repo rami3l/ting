@@ -71,16 +71,14 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 		fmt.Printf("Connecting to `%s`", c.HostAndPort())
 	}
 
-	asyncConnect := func(done chan struct{}) {
-		err = socket.Connect(c.Host, c.Port)
-		done <- struct{}{}
-	}
-
 	done := make(chan struct{})
 	t0 := time.Now()
 	timer := time.NewTimer(c.timeout)
 
-	go asyncConnect(done)
+	go func() {
+		err = socket.Connect(c.Host, c.Port)
+		done <- struct{}{}
+	}()
 
 	select {
 	// Connection finished (or returned an error) before timeout.
@@ -127,27 +125,38 @@ func (c TcpingClient) Run() (s Stats) {
 
 Loop:
 	for i := 0; i < c.tryCount; func() { time.Sleep(c.tryInterval); i++ }() {
+		var (
+			responseTime time.Duration
+			remoteAddr   net.Addr
+			err          error
+		)
+
+		// Notifier of a finished tcping test.
+		done := make(chan struct{})
+
+		go func() {
+			// Show the number of tries.
+			if c.outputOn {
+				fmt.Printf("%3d> ", i)
+			}
+			// We discard all errors here ON PURPOSE:
+			// errors should not stop the looping.
+			responseTime, remoteAddr, err = c.RunOnce()
+			done <- struct{}{}
+		}()
+
 		// If we have received a signal, we need to break the loop early.
 		select {
 		case <-signalNotifier:
 			fmt.Println("\r  <Ctrl+C>")
 			break Loop
-		default:
+		case <-done:
+			results = append(results, Result{
+				ResponseTime: responseTime,
+				RemoteAddr:   remoteAddr,
+				Error:        err,
+			})
 		}
-
-		// Otherwise, we launch the client with `c.RunOnce()`.
-		// Show the number of tries.
-		if c.outputOn {
-			fmt.Printf("%3d> ", i)
-		}
-		// We discard all errors here ON PURPOSE:
-		// errors should not stop the looping.
-		responseTime, remoteAddr, err := c.RunOnce()
-		results = append(results, Result{
-			ResponseTime: responseTime,
-			RemoteAddr:   remoteAddr,
-			Error:        err,
-		})
 	}
 
 	// Analyze and print the final result.

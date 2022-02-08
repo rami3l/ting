@@ -71,27 +71,26 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 		fmt.Printf("Connecting to `%s`", c.HostAndPort())
 	}
 
-	done := make(chan struct{})
+	done := make(chan time.Duration)
 	t0 := time.Now()
 	timer := time.NewTimer(c.timeout)
+	responseTime = TimedOut
 
 	go func() {
 		err = socket.Connect(c.Host, c.Port)
-		done <- struct{}{}
+		done <- time.Since(t0)
 	}()
 
 	select {
 	// Connection finished (or returned an error) before timeout.
-	case <-done:
-		responseTime = time.Since(t0)
+	case t := <-done:
 		if err != nil {
 			if c.outputOn {
 				fmt.Printf(": %s\n", err)
 			}
-			// The default response time on error should be -1.
-			responseTime = -1
 			return
 		}
+		responseTime = t
 		remoteAddr = (*socket.Conn).RemoteAddr()
 		if c.outputOn {
 			fmt.Printf(
@@ -100,19 +99,18 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 				SprintDuration("%.2f", responseTime, time.Millisecond),
 			)
 		}
-		return
 
 	// Connection timed out.
 	case <-timer.C:
-		responseTime = TimedOut
 		if c.outputOn {
 			fmt.Printf(
 				": timed out after %s\n",
 				SprintDuration("%.2f", c.timeout, time.Millisecond),
 			)
 		}
-		return
 	}
+
+	return
 }
 
 // Run makes several consequent tcping tests and analyzes the overall result.

@@ -86,7 +86,7 @@ func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr
 	case t := <-done:
 		if err != nil {
 			if c.outputOn {
-				fmt.Printf(": %s\n", err)
+				fmt.Printf(" (ERROR): %s\n", err)
 			}
 			return
 		}

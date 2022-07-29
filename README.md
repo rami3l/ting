@@ -1,26 +1,17 @@
 # ting
 
-`ting` is yet another `tcping` implementation.
+`ting` is a simple `tcping` implementation, heavily inspired by [zhengxiaowai/tcping].
 
 ## Contents
 
 - [ting](#ting)
   - [Contents](#contents)
-  - [Motivation & Current Status](#motivation--current-status)
-  - [Build & Installation](#build--installation)
-  - [Usage & Options](#usage--options)
+  - [Installation](#installation)
+  - [Usage](#usage)
 
-## Motivation & Current Status
+## Installation
 
-This project is heavily inspired by [zhengxiaowai/tcping], which is working pretty fine most of the times,
-but gets potentially broken when the `Python` interpreter gets updated.  
-
-Thus, using `Golang` enables me to solve the problem almost as efficiently, with the additional benefit of
-being able to easily distribute the binaries.
-
-## Build & Installation
-
-- `homebrew` install:
+- `homebrew`/`linuxbrew` install:
 
   ```bash
   brew install rami3l/tap/ting
@@ -36,9 +27,9 @@ being able to easily distribute the binaries.
   go clean -i "github.com/rami3l/ting"
   ```
 
-## Usage & Options
+## Usage
 
-Usage: `ting [hosts...] [flags]`
+`ting [hosts...] [flags]`
 
 - `-i, --interval float32`: Interval between pings, in seconds (default `1`)
 - `-n, --count int`: Number of tries (default `5`)

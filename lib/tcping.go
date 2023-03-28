@@ -1,8 +1,8 @@
 package lib
 
 import (
+	"context"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -65,43 +65,44 @@ func (c TcpingClient) HostAndPort() string {
 }
 
 // RunOnce makes a single tcping test.
-func (c TcpingClient) RunOnce() (responseTime time.Duration, remoteAddr net.Addr, err error) {
+func (c TcpingClient) RunOnce() (r Result) {
 	socket := NewSocket("tcp")
 	if c.outputOn {
 		fmt.Printf("Connecting to `%s`", c.HostAndPort())
 	}
 
 	done := make(chan time.Duration)
-	t0 := time.Now()
-	timer := time.NewTimer(c.timeout)
-	responseTime = TimedOut
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(nil)
 
+	t0 := time.Now()
 	go func() {
-		err = socket.Connect(c.Host, c.Port)
+		if err1 := socket.Connect(c.Host, c.Port); err1 != nil {
+			cancel(err1)
+		}
 		done <- time.Since(t0)
 	}()
 
 	select {
-	// Connection finished (or returned an error) before timeout.
+	// Connection finished before timeout.
 	case t := <-done:
-		if err != nil {
-			if c.outputOn {
-				fmt.Printf(" (ERROR): %s\n", err)
-			}
-			return
-		}
-		responseTime = t
-		remoteAddr = (*socket.Conn).RemoteAddr()
+		r.ResponseTime = t
+		r.RemoteAddr = (*socket.Conn).RemoteAddr()
 		if c.outputOn {
 			fmt.Printf(
 				" (%s): time=%s\n",
-				remoteAddr,
-				SprintDuration("%.2f", responseTime, time.Millisecond),
+				r.RemoteAddr,
+				SprintDuration("%.2f", r.ResponseTime, time.Millisecond),
 			)
 		}
-
+	// Connection or returned an error before timeout.
+	case <-ctx.Done():
+		r.Error = context.Cause(ctx)
+		if c.outputOn {
+			fmt.Printf(" (ERROR): %s\n", r.Error)
+		}
 	// Connection timed out.
-	case <-timer.C:
+	case <-time.After(c.timeout):
 		if c.outputOn {
 			fmt.Printf(
 				": timed out after %s\n",
@@ -122,15 +123,9 @@ func (c TcpingClient) Run() (s Stats) {
 	results := []Result{}
 
 Loop:
-	for i := 0; i < c.tryCount; func() { time.Sleep(c.tryInterval); i++ }() {
-		var (
-			responseTime time.Duration
-			remoteAddr   net.Addr
-			err          error
-		)
-
+	for i := 0; i < c.tryCount; i++ {
 		// Notifier of a finished tcping test.
-		done := make(chan struct{})
+		done := make(chan Result)
 
 		go func() {
 			// Show the number of tries.
@@ -139,22 +134,19 @@ Loop:
 			}
 			// We discard all errors here ON PURPOSE:
 			// errors should not stop the looping.
-			responseTime, remoteAddr, err = c.RunOnce()
-			done <- struct{}{}
+			done <- c.RunOnce()
 		}()
 
-		// If we have received a signal, we need to break the loop early.
+		// If we have received a signal, we need to break early.
 		select {
 		case <-signalNotifier:
 			fmt.Println("\r  <Ctrl+C>")
 			break Loop
-		case <-done:
-			results = append(results, Result{
-				ResponseTime: responseTime,
-				RemoteAddr:   remoteAddr,
-				Error:        err,
-			})
+		case result := <-done:
+			results = append(results, result)
 		}
+
+		time.Sleep(c.tryInterval)
 	}
 
 	// Analyze and print the final result.
@@ -178,5 +170,6 @@ minimum = %s, maximum = %s, average = %s
 			minTime, maxTime, avgTime,
 		)
 	}
+
 	return
 }

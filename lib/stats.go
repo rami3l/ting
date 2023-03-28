@@ -7,9 +7,9 @@ import (
 
 // Result is a record of a single run of the Tcping client.
 type Result struct {
-	ResponseTime time.Duration
 	RemoteAddr   net.Addr
 	Error        error
+	ResponseTime time.Duration
 }
 
 // Stats is the collection of Tcping client run records (Results).

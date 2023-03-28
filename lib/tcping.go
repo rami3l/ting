@@ -95,7 +95,7 @@ func (c TcpingClient) RunOnce() (r Result) {
 				SprintDuration("%.2f", r.ResponseTime, time.Millisecond),
 			)
 		}
-	// Connection or returned an error before timeout.
+	// Connection returned an error before timeout.
 	case <-ctx.Done():
 		r.Error = context.Cause(ctx)
 		if c.outputOn {

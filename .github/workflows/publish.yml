@@ -89,7 +89,7 @@ jobs:
       - name: Get tarball file name
         id: binaries
         env:
-          BIN_MAC: ting-macos-amd64.tar.gz
+          BIN_MAC: ting-macos-universal.tar.gz
           BIN_LINUX: ting-linux-amd64.tar.gz
         run: |
           echo "mac=$BIN_MAC" >> $GITHUB_OUTPUT

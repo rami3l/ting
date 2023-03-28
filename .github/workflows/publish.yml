@@ -20,13 +20,22 @@ jobs:
             asset_name: ting-windows-amd64
           - os: macos-latest
             artifact_name: ting
-            asset_name: ting-macos-amd64
+            asset_name: ting-macos-universal
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build
+      - name: Build (non-macOS)
+        if: ${{ !startsWith(matrix.os, "macos") }}
         run: go build
+
+      - name: Build (macOS)
+        if: ${{ startsWith(matrix.os, "macos") }}
+        # https://dev.to/thewraven/universal-macos-binaries-with-go-1-16-3mm3
+        run: |
+          GOOS=darwin GOARCH=amd64 go build -o ${{ matrix.artifact_name }}_amd64
+          GOOS=darwin GOARCH=arm64 go build -o ${{ matrix.artifact_name }}_arm64
+          lipo -create -output ${{ matrix.artifact_name }} ${{ matrix.artifact_name }}_amd64 ${{ matrix.artifact_name }}_arm64
 
       - name: Zip
         run: tar czvf ${{ matrix.asset_name }}.tar.gz -C . ${{ matrix.artifact_name }}
@@ -79,8 +88,8 @@ jobs:
           BIN_MAC: ting-macos-amd64.tar.gz
           BIN_LINUX: ting-linux-amd64.tar.gz
         run: |
-          echo ::set-output name=mac::$BIN_MAC
-          echo ::set-output name=linux::$BIN_LINUX
+          echo "mac=$BIN_MAC" >> $GITHUB_OUTPUT
+          echo "linux=$BIN_LINUX" >> $GITHUB_OUTPUT
 
       - name: Get url
         id: url
@@ -88,16 +97,16 @@ jobs:
           URL_MAC: https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.tag }}/${{ steps.binaries.outputs.mac }}
           URL_LINUX: https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.tag }}/${{ steps.binaries.outputs.linux }}
         run: |
-          echo ::set-output name=mac::$URL_MAC
-          echo ::set-output name=linux::$URL_LINUX
+          echo "mac=$URL_MAC" >> $GITHUB_OUTPUT
+          echo "linux=$URL_LINUX" >> $GITHUB_OUTPUT
 
       - name: Get files and checksums
         id: checksums
         run: |
           curl -LO ${{ steps.url.outputs.mac }}.sha256
           curl -LO ${{ steps.url.outputs.linux }}.sha256
-          echo ::set-output name=mac::$(cat ${{ steps.binaries.outputs.mac }}.sha256 | awk '{ print $1 }')
-          echo ::set-output name=linux::$(cat ${{ steps.binaries.outputs.linux }}.sha256 | awk '{ print $1 }')
+          echo mac=$(cat ${{ steps.binaries.outputs.mac }}.sha256 | awk '{ print $1 }') >> $GITHUB_OUTPUT
+          echo linux=$(cat ${{ steps.binaries.outputs.linux }}.sha256 | awk '{ print $1 }') >> $GITHUB_OUTPUT
 
       - name: Replace variables in template
         uses: rami3l/bumper@master
@@ -105,7 +114,6 @@ jobs:
         with:
           template: "dist/brew/template.rb"
           out: "ting.rb"
-
           rules: |
             {
               "version": "${{ steps.ver.outputs.tag }}",

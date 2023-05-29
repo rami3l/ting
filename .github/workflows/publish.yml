@@ -48,7 +48,7 @@ jobs:
         run: openssl dgst -r -sha256 ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
 
       - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@2.5.0
+        uses: svenstaro/upload-release-action@2.6.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.asset_name }}.tar.gz
@@ -57,7 +57,7 @@ jobs:
           overwrite: true
 
       - name: Upload sha256 to release
-        uses: svenstaro/upload-release-action@2.5.0
+        uses: svenstaro/upload-release-action@2.6.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ${{ matrix.asset_name }}.tar.gz.sha256
@@ -131,7 +131,7 @@ jobs:
         run: cat ting.rb
 
       - name: Upload the script to release
-        uses: svenstaro/upload-release-action@2.5.0
+        uses: svenstaro/upload-release-action@2.6.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: "ting.rb"

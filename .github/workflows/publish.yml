@@ -6,135 +6,37 @@ on:
       - "*"
 
 jobs:
+  create-release:
+    name: Create GitHub release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: ${{ contains(github.ref, '-') }}
+
   publish:
-    name: Publish for ${{ matrix.os }}
+    name: Publish release
+    needs: [create-release]
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: ting
-            asset_name: ting-linux-amd64
-          - os: windows-latest
-            artifact_name: ting.exe
-            asset_name: ting-windows-amd64
-          - os: macos-latest
-            artifact_name: ting
-            asset_name: ting-macos-universal
-
     steps:
-      - uses: actions/setup-go@v4
-        with:
-          go-version: ">=1.20.0"
-
       - uses: actions/checkout@v3
 
-      - name: Build
-        if: ${{ !startsWith(matrix.os, 'macos') }}
-        run: go build
+      - name: Setup Golang
+        uses: actions/setup-go@v4
 
-      - name: Build (macOS)
-        if: ${{ startsWith(matrix.os, 'macos') }}
-        # https://dev.to/thewraven/universal-macos-binaries-with-go-1-16-3mm3
-        run: |
-          GOOS=darwin GOARCH=amd64 go build -o ${{ matrix.artifact_name }}_amd64
-          GOOS=darwin GOARCH=arm64 go build -o ${{ matrix.artifact_name }}_arm64
-          lipo -create -output ${{ matrix.artifact_name }} ${{ matrix.artifact_name }}_amd64 ${{ matrix.artifact_name }}_arm64
-
-      - name: Zip
-        run: tar czvf ${{ matrix.asset_name }}.tar.gz -C . ${{ matrix.artifact_name }}
-
-      - name: Generate sha256
-        run: openssl dgst -r -sha256 ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
-
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@2.6.1
+      # https://goreleaser.com/ci/actions/?h=github+act#usage
+      - name: Publish via GoReleaser
+        uses: goreleaser/goreleaser-action@v4
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.asset_name }}.tar.gz
-          asset_name: ${{ matrix.asset_name }}.tar.gz
-          tag: ${{ github.ref }}
-          overwrite: true
-
-      - name: Upload sha256 to release
-        uses: svenstaro/upload-release-action@2.6.1
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ matrix.asset_name }}.tar.gz.sha256
-          asset_name: ${{ matrix.asset_name }}.tar.gz.sha256
-          tag: ${{ github.ref }}
-          overwrite: true
-
-  bump-tap-version:
-    name: Generate new ruby script for homebrew tap
-    needs: [publish]
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - run: npm i @actions/core @actions/github
-
-      - name: Get "version"
-        id: ver
-        run: echo tag=${GITHUB_REF#refs/*/} >> $GITHUB_OUTPUT
-
-      - name: Check "version"
+          distribution: goreleaser
+          version: latest
+          args: release --clean
         env:
-          RELEASE_VERSION: ${{ steps.ver.outputs.tag }}
-        run: |
-          echo "Detected version:"
-          echo $RELEASE_VERSION
-
-      - name: Get tarball file name
-        id: binaries
-        env:
-          BIN_MAC: ting-macos-universal.tar.gz
-          BIN_LINUX: ting-linux-amd64.tar.gz
-        run: |
-          echo "mac=$BIN_MAC" >> $GITHUB_OUTPUT
-          echo "linux=$BIN_LINUX" >> $GITHUB_OUTPUT
-
-      - name: Get url
-        id: url
-        env:
-          URL_MAC: https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.tag }}/${{ steps.binaries.outputs.mac }}
-          URL_LINUX: https://github.com/${{ github.repository }}/releases/download/${{ steps.ver.outputs.tag }}/${{ steps.binaries.outputs.linux }}
-        run: |
-          echo "mac=$URL_MAC" >> $GITHUB_OUTPUT
-          echo "linux=$URL_LINUX" >> $GITHUB_OUTPUT
-
-      - name: Get files and checksums
-        id: checksums
-        run: |
-          curl -LO ${{ steps.url.outputs.mac }}.sha256
-          curl -LO ${{ steps.url.outputs.linux }}.sha256
-          echo mac=$(cat ${{ steps.binaries.outputs.mac }}.sha256 | awk '{ print $1 }') >> $GITHUB_OUTPUT
-          echo linux=$(cat ${{ steps.binaries.outputs.linux }}.sha256 | awk '{ print $1 }') >> $GITHUB_OUTPUT
-
-      - name: Replace variables in template
-        uses: rami3l/bumper@master
-        id: replace
-        with:
-          template: "dist/brew/template.rb"
-          out: "ting.rb"
-          rules: |
-            {
-              "version": "${{ steps.ver.outputs.tag }}",
-              "url_mac": "${{ steps.url.outputs.mac }}",
-              "sha256_mac": "${{ steps.checksums.outputs.mac }}",
-              "url_linux": "${{ steps.url.outputs.linux }}",
-              "sha256_linux": "${{ steps.checksums.outputs.linux }}"
-            }
-
-      - name: Get the output script
-        run: cat ting.rb
-
-      - name: Upload the script to release
-        uses: svenstaro/upload-release-action@2.6.1
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: "ting.rb"
-          asset_name: "ting.rb"
-          tag: ${{ github.ref }}
-          overwrite: true
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

@@ -20,7 +20,7 @@ pub fn main() !void {
     );
 
     var diag = clap.Diagnostic{};
-    var res = clap.parse(clap.Help, &params, clap.parsers.default, .{
+    var parsed = clap.parse(clap.Help, &params, clap.parsers.default, .{
         .diagnostic = &diag,
         .allocator = gpa.allocator(),
     }) catch |err| {
@@ -28,16 +28,16 @@ pub fn main() !void {
         diag.report(std.io.getStdErr().writer(), err) catch {};
         return err;
     };
-    defer res.deinit();
+    defer parsed.deinit();
 
     const stderr_writer = std.io.getStdErr().writer();
 
-    if (res.args.help != 0) {
+    if (parsed.args.help != 0) {
         try stderr_writer.print("ting, yet another TCPing\n\n", .{});
         return clap.help(stderr_writer, clap.Help, &params, .{});
     }
 
-    if (res.args.version != 0) {
+    if (parsed.args.version != 0) {
         try stderr_writer.print("ting v{} [zig v{}]", .{
             meta.version,
             @import("builtin").zig_version,
@@ -45,20 +45,24 @@ pub fn main() !void {
         return;
     }
 
-    const count_positionals = res.positionals.len;
+    const count_positionals = parsed.positionals.len;
     if (count_positionals != 1) {
         try stderr_writer.print("error: expected a single host (found {})\n", .{count_positionals});
         std.process.exit(1);
     }
-    const host = res.positionals[0];
+    const host = parsed.positionals[0];
 
-    var cfg = ting.Tcping{
+    var t = ting.Tcping{
         .host = host,
     };
-    if (res.args.interval) |it| cfg.interval_s = it;
-    if (res.args.count) |it| cfg.count = it;
-    if (res.args.port) |it| cfg.port = it;
-    if (res.args.timeout) |it| cfg.timeout_s = it;
+    if (parsed.args.interval) |it| t.interval_s = it;
+    if (parsed.args.count) |it| t.count = it;
+    if (parsed.args.port) |it| t.port = it;
+    if (parsed.args.timeout) |it| t.timeout_s = it;
 
-    try cfg.ping(gpa.allocator(), stderr_writer);
+    const stdout_writer = std.io.getStdOut().writer();
+
+    const durations = try t.ping(gpa.allocator(), stdout_writer);
+    defer durations.deinit();
+    try t.report(durations.items, stdout_writer);
 }

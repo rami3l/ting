@@ -10,6 +10,8 @@ const ic = @cImport({
     @cInclude("sys/select.h");
 });
 
+const ArrayList = std.ArrayList;
+
 pub const Tcping = struct {
     count: u16 = 5,
     port: u16 = 80,
@@ -54,7 +56,7 @@ pub const Tcping = struct {
             };
             switch (ic.select(sock + 1, null, &fd_set, null, @ptrCast(&timeout))) {
                 1 => try posix.getsockoptError(sock),
-                else => return error.CouldNotConnect,
+                else => break error.CouldNotConnect,
             }
 
             const end = try time.Instant.now();
@@ -63,26 +65,61 @@ pub const Tcping = struct {
         } else error.CouldNotConnect;
     }
 
-    pub fn ping(self: *const Self, alloc: mem.Allocator, log_writer: anytype) !void {
-        try log_writer.print("TCPING {s}:{d} with a timeout of {d:.1}s:\n", .{ self.host, self.port, self.timeout_s });
+    pub fn ping(self: *const Self, alloc: mem.Allocator, log_writer: anytype) !ArrayList(?u64) {
+        var durations = ArrayList(?u64).init(alloc);
+        try log_writer.print("TCPING {s}:{d}\n", .{ self.host, self.port });
         return loop: for (0..self.count) |i| {
-            const res = self.probe(alloc, log_writer) catch |e| {
+            const duration, _ = self.probe(alloc, log_writer) catch |e| {
                 try log_writer.print("error: ", .{});
                 switch (e) {
                     error.UnknownHostName => {
                         try log_writer.print("cannot resolve host {s}\n", .{self.host});
-                        break :loop;
+                        break :loop durations;
                     },
                     error.CouldNotConnect => {
-                        try log_writer.print("cannot connect to {s}:{d} for seq={d}\n", .{ self.host, self.port, i });
+                        try log_writer.print("connection timed out after {d:.1}s for seq={d}\n", .{
+                            self.timeout_s,
+                            i,
+                        });
+                        try durations.append(null);
                         continue :loop;
                     },
                     else => break :loop e,
                 }
             };
-            try log_writer.print("seq={d} time={}ns\n", .{ i, res[0] });
+            try log_writer.print("seq={d} time={d:.2}ms\n", .{ i, ms_from_ns(duration) });
+            try durations.append(duration);
             time.sleep(@intFromFloat(self.interval_s * @as(f32, @floatFromInt(time.ns_per_s))));
+        } else durations;
+    }
+
+    pub fn report(self: *const Self, durations: []?u64, log_writer: anytype) !void {
+        const count = durations.len;
+        if (count == 0) return;
+
+        var oks: u64 = 0;
+        var min: u64, var max: u64 = .{ std.math.maxInt(u64), 0 };
+        var total: u128 = 0;
+        for (durations) |duration| if (duration) |d| {
+            oks += 1;
+            min = @min(min, d);
+            max = @max(max, d);
+            total += d;
         };
+
+        try log_writer.print("--- {s} tcping statistics ---\n", .{self.host});
+        try log_writer.print("{d} connections, {d} succeeded, {d} failed, {d:.2}% success rate\n", .{
+            count,
+            oks,
+            count - oks,
+            @as(f32, @floatFromInt(oks)) / @as(f32, @floatFromInt(count)) * 100.0,
+        });
+        if (oks == 0) return;
+        try log_writer.print("minimum = {d:.2}ms, maximum = {d:.2}ms, average = {d:.2}ms\n", .{
+            ms_from_ns(min),
+            ms_from_ns(max),
+            ms_from_ns(total) / @as(f32, @floatFromInt(oks)),
+        });
     }
 
     pub const Error = error{
@@ -91,12 +128,7 @@ pub const Tcping = struct {
     };
 };
 
-// const testing = std.testing;
-//
-// export fn add(a: i32, b: i32) i32 {
-//     return a + b;
-// }
-//
-// test "basic add functionality" {
-//     try testing.expect(add(3, 7) == 10);
-// }
+fn ms_from_ns(ns: anytype) f32 {
+    const ms_per_ns = 1 / @as(f32, @floatFromInt(time.ns_per_ms));
+    return @as(f32, @floatFromInt(ns)) * ms_per_ns;
+}

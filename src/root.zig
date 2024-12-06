@@ -87,7 +87,7 @@ pub const Tcping = struct {
                     else => break :loop e,
                 }
             };
-            try log_writer.print("seq={d} time={d:.2}ms\n", .{ i, ms_from_ns(duration) });
+            try log_writer.print("seq={d} time={d:.3}ms\n", .{ i, ms_from_ns(duration) });
             try durations.append(duration);
             time.sleep(@intFromFloat(self.interval_s * @as(f32, @floatFromInt(time.ns_per_s))));
         } else durations;
@@ -108,14 +108,14 @@ pub const Tcping = struct {
         };
 
         try log_writer.print("--- {s} tcping statistics ---\n", .{self.host});
-        try log_writer.print("{d} connections, {d} succeeded, {d} failed, {d:.2}% success rate\n", .{
+        try log_writer.print("{d} connections, {d} succeeded, {d} failed, {d:.1}% success rate\n", .{
             count,
             oks,
             count - oks,
             @as(f32, @floatFromInt(oks)) / @as(f32, @floatFromInt(count)) * 100.0,
         });
         if (oks == 0) return;
-        try log_writer.print("minimum = {d:.2}ms, maximum = {d:.2}ms, average = {d:.2}ms\n", .{
+        try log_writer.print("minimum = {d:.3}ms, maximum = {d:.3}ms, average = {d:.3}ms\n", .{
             ms_from_ns(min),
             ms_from_ns(max),
             ms_from_ns(total) / @as(f32, @floatFromInt(oks)),
@@ -125,6 +125,7 @@ pub const Tcping = struct {
     pub const Error = error{
         CouldNotConnect,
         UnknownHostName,
+        Interrupted,
     };
 };
 

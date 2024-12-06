@@ -9,15 +9,23 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
-    const params = comptime clap.parseParamsComptime(
-        \\-h, --help             Display this help and exit.
-        \\-v, --version          Output version information and exit.
-        \\-i, --interval <f32>   Interval between pings, in seconds (default 1)
-        \\-c, --count <u16>      Number of tries (default 5)
-        \\-p, --port <u16>       Numeric TCP port (default 80)
-        \\-w, --timeout <f32>    Maximum time to wait for a response, in seconds (default 5)
-        \\<str>                  Host to reach
-    );
+    const params = comptime clap.parseParamsComptime(blk: {
+        const t = ting.Tcping{ .host = "" };
+        break :blk std.fmt.comptimePrint(
+            \\-h, --help             Display this help and exit.
+            \\-v, --version          Output version information and exit.
+            \\-i, --interval <f32>   Interval between pings, in seconds (default: {d:.1})
+            \\-c, --count <u16>      Number of tries (default: {s})
+            \\-p, --port <u16>       Numeric TCP port (default: {d})
+            \\-w, --timeout <f32>    Maximum time to wait for a response, in seconds (default: {d:.1})
+            \\<str>                  Host to reach
+        , .{
+            t.interval_s,
+            if (t.count) |c| std.fmt.comptimePrint("{d}", c) else "unlimited",
+            t.port,
+            t.timeout_s,
+        });
+    });
 
     var diag = clap.Diagnostic{};
     var parsed = clap.parse(clap.Help, &params, clap.parsers.default, .{
@@ -33,8 +41,10 @@ pub fn main() !void {
     const stderr_writer = std.io.getStdErr().writer();
 
     if (parsed.args.help != 0) {
-        try stderr_writer.print("ting, yet another TCPing\n\n", .{});
-        return clap.help(stderr_writer, clap.Help, &params, .{});
+        try stderr_writer.print("ting, yet another TCPing\n", .{});
+        return clap.help(stderr_writer, clap.Help, &params, .{
+            .spacing_between_parameters = 0,
+        });
     }
 
     if (parsed.args.version != 0) {
@@ -50,10 +60,10 @@ pub fn main() !void {
         try stderr_writer.print("error: expected a single host (found {})\n", .{count_positionals});
         std.process.exit(1);
     }
-    const host = parsed.positionals[0];
 
     var t = ting.Tcping{
-        .host = host,
+        .host = parsed.positionals[0],
+        .count = parsed.args.count,
     };
     if (parsed.args.interval) |it| t.interval_s = it;
     if (parsed.args.count) |it| t.count = it;

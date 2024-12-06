@@ -1,8 +1,9 @@
 const std = @import("std");
-const c = std.c;
 const mem = std.mem;
+const meta = std.meta;
 const net = std.net;
 const posix = std.posix;
+const sc = std.c;
 const time = std.time;
 
 const ic = @cImport({
@@ -13,7 +14,7 @@ const ic = @cImport({
 const ArrayList = std.ArrayList;
 
 pub const Tcping = struct {
-    count: u16 = 5,
+    count: ?u16 = null,
     port: u16 = 80,
     interval_s: f32 = 1.0,
     timeout_s: f32 = 5.0,
@@ -31,11 +32,11 @@ pub const Tcping = struct {
 
         return for (addr_list.addrs) |addr| {
             // https://stackoverflow.com/a/2597774
-            const sock = try posix.socket(c.AF.INET, c.SOCK.STREAM, 0);
+            const sock = try posix.socket(sc.AF.INET, sc.SOCK.STREAM, 0);
             defer posix.close(sock);
 
-            const flags = try posix.fcntl(sock, c.F.GETFL, 0);
-            _ = try posix.fcntl(sock, c.F.SETFL, flags | ic.O_NONBLOCK);
+            const flags = try posix.fcntl(sock, sc.F.GETFL, 0);
+            _ = try posix.fcntl(sock, sc.F.SETFL, flags | ic.O_NONBLOCK);
 
             const start = try time.Instant.now();
             while (true) {
@@ -60,7 +61,6 @@ pub const Tcping = struct {
             }
 
             const end = try time.Instant.now();
-            try log_writer.print("addr={} ", .{addr});
             break .{ end.since(start), addr };
         } else error.CouldNotConnect;
     }
@@ -68,8 +68,9 @@ pub const Tcping = struct {
     pub fn ping(self: *const Self, alloc: mem.Allocator, log_writer: anytype) !ArrayList(?u64) {
         var durations = ArrayList(?u64).init(alloc);
         try log_writer.print("TCPING {s}:{d}\n", .{ self.host, self.port });
-        return loop: for (0..self.count) |i| {
-            const duration, _ = self.probe(alloc, log_writer) catch |e| {
+        var i: meta.Child(@TypeOf(self.count)) = 0;
+        return loop: while (if (self.count) |c| i < c else true) : (i += 1) {
+            const duration, const addr = self.probe(alloc, log_writer) catch |e| {
                 try log_writer.print("error: ", .{});
                 switch (e) {
                     error.UnknownHostName => {
@@ -87,7 +88,7 @@ pub const Tcping = struct {
                     else => break :loop e,
                 }
             };
-            try log_writer.print("seq={d} time={d:.3}ms\n", .{ i, ms_from_ns(duration) });
+            try log_writer.print("addr={} seq={d} time={d:.3}ms\n", .{ addr, i, ms_from_ns(duration) });
             try durations.append(duration);
             time.sleep(@intFromFloat(self.interval_s * @as(f32, @floatFromInt(time.ns_per_s))));
         } else durations;

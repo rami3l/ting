@@ -23,7 +23,12 @@ pub const Tcping = struct {
     const Self = @This();
 
     /// Returns the time required to connect to the host via TCP (in nanoseconds).
-    pub fn probe(self: *const Self, alloc: mem.Allocator, log_writer: anytype) !struct { u64, net.Address } {
+    pub fn probe(
+        self: *const Self,
+        alloc: mem.Allocator,
+        log_writer: anytype,
+        sigmask: ?*sc.sigset_t,
+    ) !struct { u64, net.Address } {
         try log_writer.print("connecting... ", .{});
         const timeout_ns: u64 = @intFromFloat(self.timeout_s * @as(f32, @floatFromInt(time.ns_per_s)));
 
@@ -51,13 +56,17 @@ pub const Tcping = struct {
             var fd_set = ic.fd_set{};
             ic.FD_SET(sock, &fd_set);
 
-            var timeout = posix.timeval{
+            var timeout = posix.timespec{
                 .tv_sec = @intCast(timeout_ns / time.ns_per_s),
-                .tv_usec = @intCast(timeout_ns % time.ns_per_s),
+                .tv_nsec = @intCast(timeout_ns % time.ns_per_s),
             };
-            switch (ic.select(sock + 1, null, &fd_set, null, @ptrCast(&timeout))) {
-                1 => try posix.getsockoptError(sock),
-                else => break error.CouldNotConnect,
+            const rc = ic.pselect(sock + 1, null, &fd_set, null, @ptrCast(&timeout), sigmask);
+            if (posix.errno(rc) == sc.E.INTR) {
+                break error.Interrupted;
+            } else if (rc == 1) {
+                try posix.getsockoptError(sock);
+            } else {
+                break error.CouldNotConnect;
             }
 
             const end = try time.Instant.now();
@@ -68,9 +77,19 @@ pub const Tcping = struct {
     pub fn ping(self: *const Self, alloc: mem.Allocator, log_writer: anytype) !ArrayList(?u64) {
         var durations = ArrayList(?u64).init(alloc);
         try log_writer.print("TCPING {s}:{d}\n", .{ self.host, self.port });
+
+        // Once the tcping sequence is started,
+        // block all incoming SIGINT except in `pconnect()` waits.
+        // See: <https://stackoverflow.com/a/6962573>
+        var sigset = sc.empty_sigset;
+        sc.sigaddset(&sigset, sc.SIG.INT);
+        var old_sigset: sc.sigset_t = undefined;
+        _ = sc.sigprocmask(sc.SIG.BLOCK, &sigset, &old_sigset);
+        defer _ = sc.sigprocmask(sc.SIG.SETMASK, &old_sigset, null);
+
         var i: meta.Child(@TypeOf(self.count)) = 0;
         return loop: while (if (self.count) |c| i < c else true) : (i += 1) {
-            const duration, const addr = self.probe(alloc, log_writer) catch |e| {
+            const duration, const addr = self.probe(alloc, log_writer, &old_sigset) catch |e| {
                 try log_writer.print("error: ", .{});
                 switch (e) {
                     error.UnknownHostName => {
@@ -84,6 +103,12 @@ pub const Tcping = struct {
                         });
                         try durations.append(null);
                         continue :loop;
+                    },
+                    error.Interrupted => {
+                        // Erase the current line.
+                        // See: <https://stackoverflow.com/a/1508589>
+                        try log_writer.print("\x1b[2K\r", .{});
+                        break :loop durations;
                     },
                     else => break :loop e,
                 }

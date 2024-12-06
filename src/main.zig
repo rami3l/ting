@@ -1,5 +1,11 @@
 const std = @import("std");
 const fmt = std.fmt;
+const posix = std.posix;
+const sc = std.c;
+
+const ic = @cImport({
+    @cInclude("unistd.h");
+});
 
 const clap = @import("clap");
 const ting = @import("ting");
@@ -22,7 +28,7 @@ pub fn main() !void {
             \\<str>                  Host to reach
         , .{
             t.interval_s,
-            if (t.count) |c| fmt.comptimePrint("{d}", c) else "unlimited",
+            if (t.count) |c| fmt.comptimePrint("{d}", .{c}) else "unlimited",
             t.port,
             t.timeout_s,
         });
@@ -73,6 +79,29 @@ pub fn main() !void {
 
     const stdout_writer = std.io.getStdOut().writer();
 
+    // Prevent our parent from receiving SIGINT.
+    // This is necessary since we want to terminate normally after having received
+    // a SIGINT, so that we won't continue to print after the prompt shows up...
+    // See: <https://unix.stackexchange.com/a/81180>
+    _ = ic.setpgid(0, 0); // TODO: Use `try posix.setpgid(0, 0);` instead in Zig v0.14.
+    var old_sigact: posix.Sigaction = undefined;
+    const sigact_ign = posix.Sigaction{
+        .flags = 0,
+        .mask = sc.empty_sigset,
+        .handler = .{ .handler = sc.SIG.IGN },
+    };
+    try posix.sigaction(sc.SIG.TTOU, &sigact_ign, &old_sigact);
+    _ = ic.tcsetpgrp(0, ic.getpid());
+    try posix.sigaction(sc.SIG.TTOU, &old_sigact, null);
+
+    // Globally handle SIGINT with noop within this process (will be overridden in `pselect()`).
+    var sigact_noop = sigact_ign;
+    sigact_noop.handler = .{ .handler = struct {
+        fn f(_: i32) callconv(.C) void {}
+    }.f };
+    try posix.sigaction(sc.SIG.INT, &sigact_noop, null);
+
+    // Run the main loop.
     const durations = try t.ping(gpa.allocator(), stdout_writer);
     defer durations.deinit();
     try t.report(durations.items, stdout_writer);

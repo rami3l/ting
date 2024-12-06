@@ -1,6 +1,7 @@
-const clap = @import("clap");
 const std = @import("std");
+const fmt = std.fmt;
 
+const clap = @import("clap");
 const ting = @import("ting");
 
 const meta = @import("./meta.zig");
@@ -11,7 +12,7 @@ pub fn main() !void {
 
     const params = comptime clap.parseParamsComptime(blk: {
         const t = ting.Tcping{ .host = "" };
-        break :blk std.fmt.comptimePrint(
+        break :blk fmt.comptimePrint(
             \\-h, --help             Display this help and exit.
             \\-v, --version          Output version information and exit.
             \\-i, --interval <f32>   Interval between pings, in seconds (default: {d:.1})
@@ -21,20 +22,20 @@ pub fn main() !void {
             \\<str>                  Host to reach
         , .{
             t.interval_s,
-            if (t.count) |c| std.fmt.comptimePrint("{d}", c) else "unlimited",
+            if (t.count) |c| fmt.comptimePrint("{d}", c) else "unlimited",
             t.port,
             t.timeout_s,
         });
     });
 
     var diag = clap.Diagnostic{};
-    var parsed = clap.parse(clap.Help, &params, clap.parsers.default, .{
+    const parsed = clap.parse(clap.Help, &params, clap.parsers.default, .{
         .diagnostic = &diag,
         .allocator = gpa.allocator(),
-    }) catch |err| {
+    }) catch |e| {
         // Report useful error and exit.
-        diag.report(std.io.getStdErr().writer(), err) catch {};
-        return err;
+        diag.report(std.io.getStdErr().writer(), e) catch {};
+        return e;
     };
     defer parsed.deinit();
 

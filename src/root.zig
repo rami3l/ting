@@ -79,7 +79,7 @@ pub const Tcping = struct {
         try log_writer.print("TCPING {s}:{d}\n", .{ self.host, self.port });
 
         // Once the tcping sequence is started,
-        // block all incoming SIGINT except in `pconnect()` waits.
+        // block all incoming SIGINT except in `connect()` waits.
         // See: <https://stackoverflow.com/a/6962573>
         var sigset = sc.empty_sigset;
         sc.sigaddset(&sigset, sc.SIG.INT);

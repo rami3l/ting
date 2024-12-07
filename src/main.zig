@@ -22,16 +22,11 @@ pub fn main() !void {
             \\-h, --help             Display this help and exit.
             \\-v, --version          Output version information and exit.
             \\-i, --interval <f32>   Interval between pings, in seconds (default: {d:.1})
-            \\-c, --count <u16>      Number of tries (default: {s})
+            \\-c, --count <u16>      Number of tries (default: {?})
             \\-p, --port <u16>       Numeric TCP port (default: {d})
             \\-w, --timeout <f32>    Maximum time to wait for a response, in seconds (default: {d:.1})
             \\<str>                  Host to reach
-        , .{
-            t.interval_s,
-            if (t.count) |c| fmt.comptimePrint("{d}", .{c}) else "unlimited",
-            t.port,
-            t.timeout_s,
-        });
+        , .{ t.interval_s, t.count, t.port, t.timeout_s });
     });
 
     var diag = clap.Diagnostic{};

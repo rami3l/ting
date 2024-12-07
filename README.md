@@ -1,14 +1,8 @@
 # ting
 
-`ting` is a simple `tcping` implementation, heavily inspired by [zhengxiaowai/tcping].
+`ting` is a simple `tcping` implementation in Zig.
 
-## Contents
-
-- [ting](#ting)
-  - [Contents](#contents)
-  - [Installation](#installation)
-  - [Usage](#usage)
-
+<!--
 ## Installation
 
 - `homebrew`/`linuxbrew` install:
@@ -26,14 +20,25 @@
   # To uninstall:
   go clean -i "github.com/rami3l/ting"
   ```
+-->
 
 ## Usage
 
-`ting [hosts...] [flags]`
-
-- `-i, --interval float32`: Interval between pings, in seconds (default `1`)
-- `-n, --count int`: Number of tries (default `5`)
-- `-p, --port int`: Numeric TCP port (default `80`)
-- `-w, --timeout float32`: Maximum time to wait for a response, in seconds (default `5`)
-
-[zhengxiaowai/tcping]: https://github.com/zhengxiaowai/tcping
+```console
+> ting --help
+ting, yet another TCPing
+    -h, --help
+            Display this help and exit.
+    -v, --version
+            Output version information and exit.
+    -i, --interval <f32>
+            Interval between pings, in seconds (default: 1.0)
+    -c, --count <u16>
+            Number of tries (default: null)
+    -p, --port <u16>
+            Numeric TCP port (default: 80)
+    -w, --timeout <f32>
+            Maximum time to wait for a response, in seconds (default: 5.0)
+    <str>
+            Host to reach
+```

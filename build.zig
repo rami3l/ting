@@ -3,7 +3,7 @@ const std = @import("std");
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     // Standard target options allows the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -15,8 +15,19 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const version = try std.SemanticVersion.parse(b.option(
+        []const u8,
+        "version",
+        "Semver string for building this project",
+    ) orelse "0.0.0");
+
+    const build_opts = b.addOptions();
+    build_opts.addOption(std.SemanticVersion, "version", version);
+    const build_opts_mod = build_opts.createModule();
+
     const lib = b.addStaticLibrary(.{
         .name = "ting",
+        .version = version,
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
         .root_source_file = b.path("src/root.zig"),
@@ -31,6 +42,7 @@ pub fn build(b: *std.Build) void {
 
     const exe = b.addExecutable(.{
         .name = "ting",
+        .version = version,
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
@@ -98,6 +110,7 @@ pub fn build(b: *std.Build) void {
     // (Nothing yet...)
 
     // Below are the dependencies of `exe`:
+    exe.root_module.addImport("build_opts", build_opts_mod);
     exe.root_module.addImport("ting", &lib.root_module);
     exe.root_module.addImport("clap", clap.module("clap"));
 }

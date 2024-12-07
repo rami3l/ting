@@ -10,8 +10,6 @@ const ic = @cImport({
 const clap = @import("clap");
 const ting = @import("ting");
 
-const meta = @import("./meta.zig");
-
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -51,7 +49,7 @@ pub fn main() !void {
 
     if (parsed.args.version != 0) {
         try stderr_writer.print("ting v{} [zig v{}]", .{
-            meta.version,
+            @import("build_opts").version,
             @import("builtin").zig_version,
         });
         return;

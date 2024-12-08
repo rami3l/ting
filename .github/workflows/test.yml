@@ -10,25 +10,23 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-          - os: windows-latest
           - os: macos-latest
+          # - os: windows-latest
 
     steps:
-      - name: Setup Golang
-        uses: actions/setup-go@v5
-        with:
-          go-version: ">=1.20.0"
-
       - uses: actions/checkout@v4
 
-      - name: Build
-        run: go build
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v1
+        with:
+          version: latest
 
-      - name: Lint
-        uses: golangci/golangci-lint-action@v6
+      - name: Build
+        run: zig build
 
       - name: Run tests
-        run: go test
+        run: zig build test

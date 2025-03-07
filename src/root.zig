@@ -57,8 +57,8 @@ pub const Tcping = struct {
             ic.FD_SET(sock, &fd_set);
 
             var timeout = posix.timespec{
-                .tv_sec = @intCast(timeout_ns / time.ns_per_s),
-                .tv_nsec = @intCast(timeout_ns % time.ns_per_s),
+                .sec = @intCast(timeout_ns / time.ns_per_s),
+                .nsec = @intCast(timeout_ns % time.ns_per_s),
             };
             const rc = ic.pselect(sock + 1, null, &fd_set, null, @ptrCast(&timeout), sigmask);
             if (posix.errno(rc) == sc.E.INTR) {

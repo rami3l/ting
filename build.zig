@@ -112,6 +112,6 @@ pub fn build(b: *std.Build) !void {
     // Below are the dependencies of `exe`:
     exe.linkLibC();
     exe.root_module.addImport("build_opts", build_opts_mod);
-    exe.root_module.addImport("ting", &lib.root_module);
+    exe.root_module.addImport("ting", lib.root_module);
     exe.root_module.addImport("clap", clap.module("clap"));
 }

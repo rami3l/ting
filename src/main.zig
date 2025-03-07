@@ -55,14 +55,13 @@ pub fn main() !void {
         return;
     }
 
-    const count_positionals = parsed.positionals.len;
-    if (count_positionals != 1) {
-        try stderr_writer.print("error: expected a single host (found {})\n", .{count_positionals});
+    const host = parsed.positionals[0] orelse {
+        try stderr_writer.print("error: expected a single host\n", .{});
         std.process.exit(1);
-    }
+    };
 
     var t = ting.Tcping{
-        .host = parsed.positionals[0],
+        .host = host,
         .count = parsed.args.count,
     };
     if (parsed.args.interval) |it| t.interval_s = it;
@@ -76,23 +75,23 @@ pub fn main() !void {
     // This is necessary since we want to terminate normally after having received
     // a SIGINT, so that we won't continue to print after the prompt shows up...
     // See: <https://unix.stackexchange.com/a/81180>
-    _ = ic.setpgid(0, 0); // TODO: Use `try posix.setpgid(0, 0);` instead in Zig v0.14.
+    try posix.setpgid(0, 0);
     var old_sigact: posix.Sigaction = undefined;
     const sigact_ign = posix.Sigaction{
         .flags = 0,
         .mask = sc.empty_sigset,
         .handler = .{ .handler = sc.SIG.IGN },
     };
-    try posix.sigaction(sc.SIG.TTOU, &sigact_ign, &old_sigact);
+    posix.sigaction(sc.SIG.TTOU, &sigact_ign, &old_sigact);
     _ = ic.tcsetpgrp(0, ic.getpid());
-    try posix.sigaction(sc.SIG.TTOU, &old_sigact, null);
+    posix.sigaction(sc.SIG.TTOU, &old_sigact, null);
 
     // Globally handle SIGINT with noop within this process (will be overridden in `pselect()`).
     var sigact_noop = sigact_ign;
     sigact_noop.handler = .{ .handler = struct {
         fn f(_: i32) callconv(.C) void {}
     }.f };
-    try posix.sigaction(sc.SIG.INT, &sigact_noop, null);
+    posix.sigaction(sc.SIG.INT, &sigact_noop, null);
 
     // Run the main loop.
     const durations = try t.ping(gpa.allocator(), stdout_writer);

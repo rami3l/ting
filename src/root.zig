@@ -7,7 +7,9 @@ const sc = std.c;
 const time = std.time;
 
 const ic = @cImport({
+    @cDefine("_GNU_SOURCE", {});
     @cInclude("fcntl.h");
+    @cInclude("signal.h");
     @cInclude("sys/select.h");
 });
 
@@ -27,7 +29,7 @@ pub const Tcping = struct {
         self: *const Self,
         alloc: mem.Allocator,
         log_writer: anytype,
-        sigmask: ?*sc.sigset_t,
+        sigmask: ?*posix.sigset_t,
     ) !struct { u64, net.Address } {
         try log_writer.print("connecting... ", .{});
         const timeout_ns: u64 = @intFromFloat(self.timeout_s * @as(f32, @floatFromInt(time.ns_per_s)));
@@ -54,13 +56,15 @@ pub const Tcping = struct {
             }
 
             var fd_set = ic.fd_set{};
-            ic.FD_SET(sock, &fd_set);
+            // HACK: The following does not work:
+            // ic.FD_SET(sock, &fd_set);
+            FD_SET(sock, &fd_set);
 
             var timeout = posix.timespec{
                 .sec = @intCast(timeout_ns / time.ns_per_s),
                 .nsec = @intCast(timeout_ns % time.ns_per_s),
             };
-            const rc = ic.pselect(sock + 1, null, &fd_set, null, @ptrCast(&timeout), sigmask);
+            const rc = ic.pselect(sock + 1, null, &fd_set, null, @ptrCast(&timeout), @ptrCast(@alignCast(sigmask)));
             if (posix.errno(rc) == sc.E.INTR) {
                 break error.Interrupted;
             } else if (rc == 1) {
@@ -81,11 +85,13 @@ pub const Tcping = struct {
         // Once the tcping sequence is started,
         // block all incoming SIGINT except in `connect()` waits.
         // See: <https://stackoverflow.com/a/6962573>
-        var sigset = sc.empty_sigset;
-        sc.sigaddset(&sigset, sc.SIG.INT);
-        var old_sigset: sc.sigset_t = undefined;
-        _ = sc.sigprocmask(sc.SIG.BLOCK, &sigset, &old_sigset);
-        defer _ = sc.sigprocmask(sc.SIG.SETMASK, &old_sigset, null);
+        var sigset = posix.empty_sigset;
+        // HACK: The following does not work:
+        // sc.sigaddset(&sigset, sc.SIG.INT);
+        _ = ic.sigaddset(@ptrCast(@alignCast(&sigset)), sc.SIG.INT);
+        var old_sigset: posix.sigset_t = undefined;
+        posix.sigprocmask(sc.SIG.BLOCK, &sigset, &old_sigset);
+        defer posix.sigprocmask(sc.SIG.SETMASK, &old_sigset, null);
 
         var i: meta.Child(@TypeOf(self.count)) = 0;
         return loop: while (if (self.count) |c| i < c else true) : (i += 1) {
@@ -158,4 +164,13 @@ pub const Tcping = struct {
 fn ms_from_ns(ns: anytype) f32 {
     const ms_per_ns = 1 / @as(f32, @floatFromInt(time.ns_per_ms));
     return @as(f32, @floatFromInt(ns)) * ms_per_ns;
+}
+
+fn FD_SET(fd: sc.fd_t, set: *ic.fd_set) void {
+    const Cell = @TypeOf(set.fds_bits[0]);
+    const cell_bits = @bitSizeOf(Cell);
+    const fd_: usize = @intCast(fd);
+    const idx = fd_ / cell_bits;
+    const offset = fd_ % cell_bits;
+    set.fds_bits[idx] |= @as(Cell, @intCast(1)) << @truncate(offset);
 }

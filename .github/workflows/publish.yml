@@ -10,7 +10,7 @@ jobs:
     name: Create GitHub release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Create release
         uses: softprops/action-gh-release@v3
         with:
@@ -25,7 +25,7 @@ jobs:
         include:
           - os: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Golang
         uses: actions/setup-go@v6
